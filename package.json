@@ -29,6 +29,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.2",
     "recoil": "^0.7.7",
+    "recoil-persist": "^5.1.0",
     "swiper": "^9.1.0",
     "zmp-sdk": "^2.39.9",
     "zmp-ui": "^1.11.5"

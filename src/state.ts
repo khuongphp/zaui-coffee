@@ -1,5 +1,6 @@
 import { atom, selector, selectorFamily } from "recoil";
 import { getLocation, getPhoneNumber, getUserInfo } from "zmp-sdk";
+import { getStorage, setStorage } from "zmp-sdk/apis";
 import logo from "static/logo.png";
 import { Category } from "types/category";
 import { Product, Variant } from "types/product";
@@ -9,7 +10,57 @@ import { calculateDistance } from "utils/location";
 import { Store } from "types/delivery";
 import { calcFinalPrice } from "utils/product";
 import { wait } from "utils/async";
+import { CART_STORAGE_KEY } from "utils/storage";
 import categories from "../mock/categories.json";
+
+// Persist cart with Zalo Native Storage on device; fallback to localStorage on browser (dev).
+// Direct getStorage/setStorage so it works in Zalo Mini App on phone.
+function cartPersistEffect({
+  setSelf,
+  onSet,
+  trigger,
+}: Parameters<import("recoil").AtomEffect<Cart>>[0]) {
+  if (trigger === "get") {
+    getStorage({ keys: [CART_STORAGE_KEY] })
+      .then((data) => {
+        const raw = data[CART_STORAGE_KEY];
+        if (raw != null) {
+          try {
+            const parsed =
+              typeof raw === "string" ? JSON.parse(raw) : raw;
+            if (Array.isArray(parsed)) setSelf(parsed);
+          } catch {
+            // ignore invalid data
+          }
+        }
+      })
+      .catch(() => {
+        if (typeof window !== "undefined" && window.localStorage) {
+          try {
+            const s = localStorage.getItem(CART_STORAGE_KEY);
+            if (s) {
+              const parsed = JSON.parse(s) as Cart;
+              if (Array.isArray(parsed)) setSelf(parsed);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      });
+  }
+  onSet((newValue) => {
+    const str = JSON.stringify(newValue);
+    setStorage({ data: { [CART_STORAGE_KEY]: str } }).catch(() => {
+      if (typeof window !== "undefined" && window.localStorage) {
+        try {
+          localStorage.setItem(CART_STORAGE_KEY, str);
+        } catch {
+          // ignore
+        }
+      }
+    });
+  });
+}
 
 export const userState = selector({
   key: "user",
@@ -71,6 +122,7 @@ export const productsByCategoryState = selectorFamily<Product[], string>({
 export const cartState = atom<Cart>({
   key: "cart",
   default: [],
+  effects_UNSTABLE: [cartPersistEffect],
 });
 
 export const totalQuantityState = selector({
